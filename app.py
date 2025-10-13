@@ -54,8 +54,8 @@ st.title("📱 iCloud VCF Generator")
 st.caption("Generate realistic Indian contact files (.vcf and .csv) for testing or import.")
 
 num_files = st.number_input("Number of VCF files to generate", 1, 50, 5)
-min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 200)
-max_contacts = st.number_input("Maximum contacts per file", 10, 1000, 300)
+min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 500)
+max_contacts = st.number_input("Maximum contacts per file", 10, 1000, 600)
 vcf_base_name = st.text_input("Base file name", "contacts")
 
 def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="contacts"):
@@ -143,4 +143,4 @@ if st.button("🚀 Generate Files"):
     st.download_button("⬇️ Download CSV (.csv)", data=csv_bytes,
                        file_name="icloud_contacts.csv", mime="text/csv")
 
-st.markdown("<div class='footer'>Made with ❤️ by <b>Atul 💻</b></div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>Made with ❤️ by <b>Naresha 💻</b></div>", unsafe_allow_html=True)
