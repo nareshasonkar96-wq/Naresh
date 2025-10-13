@@ -24,7 +24,7 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             num = start_digit + ''.join(random.choices("0123456789", k=9))
             if num in used_numbers:
                 continue
-            prefix_type = random.choice(["plain", "91", "+91", "0"])
+            prefix_type = random.choice(["plain",  "+91",])
             if prefix_type == "91":
                 formatted = f"91{num}"
             elif prefix_type == "+91":
