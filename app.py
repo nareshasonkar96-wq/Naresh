@@ -1,14 +1,57 @@
 import streamlit as st
 import random
-import os
 import io
 import zipfile
 import getindianname as gname
+import pandas as pd
 
+# ========== CONFIG ==========
+PASSWORD = "Naresh@41952"   # 🛡️ change this to any password you want
 st.set_page_config(page_title="iCloud VCF Generator", page_icon="📱", layout="centered")
 
+# ========== PAGE STYLE ==========
+st.markdown("""
+    <style>
+        body {
+            background: linear-gradient(180deg, #007bff 0%, #00bfff 100%);
+            color: white;
+        }
+        .stApp {
+            background: linear-gradient(180deg, #007bff 0%, #00bfff 100%);
+            color: white;
+        }
+        div.block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            background-color: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            box-shadow: 0px 4px 15px rgba(0,0,0,0.2);
+        }
+        h1, h2, h3, h4 {
+            color: white !important;
+            text-align: center;
+        }
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 50px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# ========== PASSWORD LOGIN ==========
+st.title("🔐 Secure iCloud VCF Generator")
+
+pwd = st.text_input("Enter password to access:", type="password")
+if pwd != PASSWORD:
+    st.warning("Please enter the correct password to continue.")
+    st.stop()
+
+# ========== MAIN APP ==========
 st.title("📱 iCloud VCF Generator")
-st.caption("Generate realistic Indian contact .vcf files for testing or import.")
+st.caption("Generate realistic Indian contact files (.vcf and .csv) for testing or import.")
 
 num_files = st.number_input("Number of VCF files to generate", 1, 50, 5)
 min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 200)
@@ -24,7 +67,7 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             num = start_digit + ''.join(random.choices("0123456789", k=9))
             if num in used_numbers:
                 continue
-            prefix_type = random.choice(["plain",  "+91",])
+            prefix_type = random.choice(["plain", "+91",])
             if prefix_type == "91":
                 formatted = f"91{num}"
             elif prefix_type == "+91":
@@ -53,6 +96,7 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
         "Sanand", "Akota", "Gorwa", "Manjalpur", "Bhayli"
     ]
 
+    all_data = []
     memory_zip = io.BytesIO()
     with zipfile.ZipFile(memory_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
         for i in range(1, num_files + 1):
@@ -81,12 +125,22 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
                     f"N:{name};;;;\r\nFN:{name}\r\n"
                     f"TEL;TYPE=VOICE,CELL;VALUE=text:{mobile}\r\nEND:VCARD\r\n\r\n"
                 )
+                all_data.append({"Name": name, "Mobile": mobile})
             zipf.writestr(f"{vcf_base_name}_{i}_icloud_realistic.vcf", vcf_text)
 
     memory_zip.seek(0)
-    return memory_zip
+    df = pd.DataFrame(all_data)
+    return memory_zip, df
 
-if st.button("🚀 Generate VCF Files"):
-    result = generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name)
-    st.success("✅ All VCF files generated successfully — ready for download!")
-    st.download_button("⬇️ Download ZIP", data=result, file_name="icloud_vcf_files.zip", mime="application/zip")
+if st.button("🚀 Generate Files"):
+    result_zip, result_csv = generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name)
+    st.success("✅ All files generated successfully — ready for download!")
+
+    st.download_button("⬇️ Download ZIP (.vcf)", data=result_zip,
+                       file_name="icloud_vcf_files.zip", mime="application/zip")
+
+    csv_bytes = result_csv.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Download CSV (.csv)", data=csv_bytes,
+                       file_name="icloud_contacts.csv", mime="text/csv")
+
+st.markdown("<div class='footer'>Made with ❤️ by <b>Atul 💻</b></div>", unsafe_allow_html=True)
