@@ -55,7 +55,7 @@ st.caption("Generate realistic Indian contact files (.vcf and .csv) for testing 
 
 num_files = st.number_input("Number of VCF files to generate", 1, 50, 5)
 min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 500)
-max_contacts = st.number_input("Maximum contacts per file", 10, 1000, 600)
+max_contacts = st.number_input("Maximum contacts per file", 10, 1200, 600)
 vcf_base_name = st.text_input("Base file name", "contacts")
 
 def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="contacts"):
