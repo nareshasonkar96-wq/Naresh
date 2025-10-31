@@ -7,8 +7,8 @@ import pandas as pd
 import os
 
 # ========== CONFIG ==========
-PASSWORD = "Naresh@41952"   # 🛡️ change this to any password you want
-CSV_PATH = "Cleaned_Numbers_Without_91.csv"  # CSV file must be in same folder
+PASSWORD = "Naresh@41952"
+CSV_PATH = "Cleaned_Numbers_Without_91.csv"
 COLUMN_NAME = "Phone Number (Without 91)"
 
 st.set_page_config(page_title="iCloud VCF Generator", page_icon="📱", layout="centered")
@@ -47,7 +47,6 @@ st.markdown("""
 
 # ========== PASSWORD LOGIN ==========
 st.title("🔐 Secure iCloud VCF Generator")
-
 pwd = st.text_input("Enter password to access:", type="password")
 if pwd != PASSWORD:
     st.warning("Please enter the correct password to continue.")
@@ -57,12 +56,13 @@ if pwd != PASSWORD:
 st.title("📱 iCloud VCF Generator")
 st.caption("Generate realistic Indian contact files (.vcf and .csv) using CSV + random generation.")
 
+# ========== USER INPUTS ==========
 num_files = st.number_input("Number of VCF files to generate", 1, 50, 5)
 min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 500)
 max_contacts = st.number_input("Maximum contacts per file", 10, 1200, 600)
 vcf_base_name = st.text_input("Base file name", "contacts")
 
-# ========== LOAD CSV & SHOW SUMMARY ==========
+# ========== LOAD CSV & SUMMARY ==========
 if not os.path.exists(CSV_PATH):
     st.error(f"❌ CSV file not found: {CSV_PATH}")
     st.stop()
@@ -75,8 +75,11 @@ if COLUMN_NAME not in df_csv.columns:
 csv_numbers = df_csv[COLUMN_NAME].dropna().astype(str).unique().tolist()
 total_csv = len(csv_numbers)
 
-st.info(f"📋 **Current CSV Summary:**\n\n"
-        f"Total numbers available: **{total_csv}**")
+st.markdown(f"""
+### 📋 Current CSV Summary
+- **Total numbers available:** {total_csv}
+- **File:** `{CSV_PATH}`
+""")
 
 confirm_overwrite = st.checkbox("🛡️ I confirm to overwrite the CSV file after generation")
 
@@ -130,7 +133,6 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
     with zipfile.ZipFile(memory_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
         for i in range(1, num_files + 1):
             count = random.randint(min_contacts, max_contacts)
-
             csv_needed = min(int(count * 0.7), len(used_from_csv))
             random_needed = count - csv_needed
             total_to_generate += random_needed
@@ -172,7 +174,7 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
 
             zipf.writestr(f"{vcf_base_name}_{i}_icloud_realistic.vcf", vcf_text)
 
-    # Only overwrite if confirmed
+    # Overwrite CSV only if confirmed
     if confirm_overwrite:
         df_remaining = pd.DataFrame({COLUMN_NAME: remaining_after_use})
         df_remaining.to_csv(CSV_PATH, index=False, encoding="utf-8")
@@ -185,18 +187,15 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
 # ========== RUN BUTTON ==========
 if st.button("🚀 Generate Files"):
     if not confirm_overwrite:
-        st.warning("⚠️ Please confirm overwrite to continue generation.")
+        st.warning("⚠️ Please tick 'Confirm overwrite' before generating.")
         st.stop()
 
     result_zip, result_csv, used_csv, generated_new, remaining, total_csv = generate_icloud_vcf(
         num_files, min_contacts, max_contacts, vcf_base_name
     )
 
-    st.success(
-        f"✅ Used {used_csv} CSV numbers (+91 prefixed), generated {generated_new} random numbers.\n\n"
-        f"📋 Total in file before: {total_csv}\n"
-        f"📁 Remaining now: {remaining}"
-    )
+    st.success(f"✅ Used {used_csv} CSV numbers (+91 prefixed) and generated {generated_new} random numbers.")
+    st.info(f"📊 **Summary:**\n\n- Total before: {total_csv}\n- Used this run: {used_csv}\n- Remaining now: {remaining}")
 
     st.download_button(
         "⬇️ Download ZIP (.vcf)", data=result_zip,
