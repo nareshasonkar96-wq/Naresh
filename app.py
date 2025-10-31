@@ -4,9 +4,13 @@ import io
 import zipfile
 import getindianname as gname
 import pandas as pd
+import os
 
 # ========== CONFIG ==========
 PASSWORD = "Naresh@41952"   # 🛡️ change this to any password you want
+CSV_PATH = "Cleaned_Numbers_Without_91.csv"  # CSV file must be in same folder
+COLUMN_NAME = "Phone Number (Without 91)"
+
 st.set_page_config(page_title="iCloud VCF Generator", page_icon="📱", layout="centered")
 
 # ========== PAGE STYLE ==========
@@ -51,33 +55,60 @@ if pwd != PASSWORD:
 
 # ========== MAIN APP ==========
 st.title("📱 iCloud VCF Generator")
-st.caption("Generate realistic Indian contact files (.vcf and .csv) for testing or import.")
+st.caption("Generate realistic Indian contact files (.vcf and .csv) using CSV + random generation.")
 
 num_files = st.number_input("Number of VCF files to generate", 1, 50, 5)
 min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 500)
 max_contacts = st.number_input("Maximum contacts per file", 10, 1200, 600)
 vcf_base_name = st.text_input("Base file name", "contacts")
 
+# ========== LOAD CSV & SHOW SUMMARY ==========
+if not os.path.exists(CSV_PATH):
+    st.error(f"❌ CSV file not found: {CSV_PATH}")
+    st.stop()
+
+df_csv = pd.read_csv(CSV_PATH)
+if COLUMN_NAME not in df_csv.columns:
+    st.error(f"❌ Column '{COLUMN_NAME}' not found in CSV file.")
+    st.stop()
+
+csv_numbers = df_csv[COLUMN_NAME].dropna().astype(str).unique().tolist()
+total_csv = len(csv_numbers)
+
+st.info(f"📋 **Current CSV Summary:**\n\n"
+        f"Total numbers available: **{total_csv}**")
+
+confirm_overwrite = st.checkbox("🛡️ I confirm to overwrite the CSV file after generation")
+
+# ========== FUNCTION ==========
 def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="contacts"):
     used_numbers = set()
+    all_data = []
+
+    use_count = int(total_csv * 0.7)
+    used_from_csv = random.sample(csv_numbers, min(use_count, total_csv))
+    remaining_after_use = [x for x in csv_numbers if x not in used_from_csv]
 
     def random_indian_number():
         while True:
             start_digit = random.choice(["7", "8", "9"])
             num = start_digit + ''.join(random.choices("0123456789", k=9))
-            if num in used_numbers:
+            if num in used_numbers or num in csv_numbers:
                 continue
-            prefix_type = random.choice(["plain", "+91",])
-            if prefix_type == "91":
-                formatted = f"91{num}"
-            elif prefix_type == "+91":
-                formatted = f"+91{num}"
-            elif prefix_type == "0":
-                formatted = f"0{num}"
+            formatted = random.choice(["+91", "91", "0", "plain"])
+            if formatted == "+91":
+                final = f"+91{num}"
+            elif formatted == "91":
+                final = f"91{num}"
+            elif formatted == "0":
+                final = f"0{num}"
             else:
-                formatted = num
+                final = num
             used_numbers.add(num)
-            return formatted
+            return final
+
+    total_to_generate = 0
+    memory_zip = io.BytesIO()
 
     relationship_names = [
         "Papa", "Mummy", "Bhai", "Didi", "Bhabhi", "Chacha", "Chachi",
@@ -96,12 +127,24 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
         "Sanand", "Akota", "Gorwa", "Manjalpur", "Bhayli"
     ]
 
-    all_data = []
-    memory_zip = io.BytesIO()
     with zipfile.ZipFile(memory_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
         for i in range(1, num_files + 1):
             count = random.randint(min_contacts, max_contacts)
-            numbers = [random_indian_number() for _ in range(count)]
+
+            csv_needed = min(int(count * 0.7), len(used_from_csv))
+            random_needed = count - csv_needed
+            total_to_generate += random_needed
+
+            selected_csv = random.sample(used_from_csv, csv_needed) if csv_needed > 0 else []
+            for num in selected_csv:
+                used_from_csv.remove(num)
+
+            csv_prefixed = [f"+91{num.strip()}" if not num.strip().startswith("+91") else num.strip()
+                            for num in selected_csv]
+            random_numbers = [random_indian_number() for _ in range(random_needed)]
+            all_numbers = csv_prefixed + random_numbers
+            random.shuffle(all_numbers)
+
             rename_indices = random.sample(range(count), min(180, count))
             used_relationships = set()
             names_list = []
@@ -119,28 +162,51 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
                     names_list.append(f"{random_name} {service} {location}")
 
             vcf_text = ""
-            for name, mobile in zip(names_list, numbers):
+            for name, mobile in zip(names_list, all_numbers):
                 vcf_text += (
                     f"BEGIN:VCARD\r\nVERSION:3.0\r\n"
                     f"N:{name};;;;\r\nFN:{name}\r\n"
                     f"TEL;TYPE=VOICE,CELL;VALUE=text:{mobile}\r\nEND:VCARD\r\n\r\n"
                 )
                 all_data.append({"Name": name, "Mobile": mobile})
+
             zipf.writestr(f"{vcf_base_name}_{i}_icloud_realistic.vcf", vcf_text)
+
+    # Only overwrite if confirmed
+    if confirm_overwrite:
+        df_remaining = pd.DataFrame({COLUMN_NAME: remaining_after_use})
+        df_remaining.to_csv(CSV_PATH, index=False, encoding="utf-8")
 
     memory_zip.seek(0)
     df = pd.DataFrame(all_data)
-    return memory_zip, df
 
+    return memory_zip, df, len(used_from_csv) * num_files, total_to_generate, len(remaining_after_use), total_csv
+
+# ========== RUN BUTTON ==========
 if st.button("🚀 Generate Files"):
-    result_zip, result_csv = generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name)
-    st.success("✅ All files generated successfully — ready for download!")
+    if not confirm_overwrite:
+        st.warning("⚠️ Please confirm overwrite to continue generation.")
+        st.stop()
 
-    st.download_button("⬇️ Download ZIP (.vcf)", data=result_zip,
-                       file_name="icloud_vcf_files.zip", mime="application/zip")
+    result_zip, result_csv, used_csv, generated_new, remaining, total_csv = generate_icloud_vcf(
+        num_files, min_contacts, max_contacts, vcf_base_name
+    )
+
+    st.success(
+        f"✅ Used {used_csv} CSV numbers (+91 prefixed), generated {generated_new} random numbers.\n\n"
+        f"📋 Total in file before: {total_csv}\n"
+        f"📁 Remaining now: {remaining}"
+    )
+
+    st.download_button(
+        "⬇️ Download ZIP (.vcf)", data=result_zip,
+        file_name="icloud_vcf_files.zip", mime="application/zip"
+    )
 
     csv_bytes = result_csv.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇️ Download CSV (.csv)", data=csv_bytes,
-                       file_name="icloud_contacts.csv", mime="text/csv")
+    st.download_button(
+        "⬇️ Download CSV (.csv)", data=csv_bytes,
+        file_name="icloud_contacts.csv", mime="text/csv"
+    )
 
 st.markdown("<div class='footer'>Made with ❤️ by <b>Naresha 💻</b></div>", unsafe_allow_html=True)
