@@ -56,7 +56,6 @@ if pwd != PASSWORD:
 st.title("📱 iCloud VCF Generator")
 st.caption("Generate realistic Indian contact files (.vcf and .csv) using CSV + random generation.")
 
-# ========== USER INPUTS ==========
 num_files = st.number_input("Number of VCF files to generate", 1, 50, 5)
 min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 500)
 max_contacts = st.number_input("Maximum contacts per file", 10, 1200, 600)
@@ -83,14 +82,32 @@ st.markdown(f"""
 
 confirm_overwrite = st.checkbox("🛡️ I confirm to overwrite the CSV file after generation")
 
-# ========== FUNCTION ==========
+# ========== MAIN FUNCTION ==========
 def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="contacts"):
     used_numbers = set()
     all_data = []
+    global csv_numbers
 
-    use_count = int(total_csv * 0.7)
-    used_from_csv = random.sample(csv_numbers, min(use_count, total_csv))
-    remaining_after_use = [x for x in csv_numbers if x not in used_from_csv]
+    memory_zip = io.BytesIO()
+    total_used_from_csv = 0
+    total_random_generated = 0
+
+    relationship_names = [
+        "Papa", "Mummy", "Bhai", "Didi", "Bhabhi", "Chacha", "Chachi",
+        "Mama", "Mami", "Bua", "Fufa", "Nana", "Nani", "Dada", "Dadi",
+        "Baby", "Janu", "Darling", "Hubby", "Wifey", "Bestie", "Dost"
+    ]
+    service_suffixes = [
+        "Kirana Store", "Tailor", "Maid", "Watchman", "Driver", "Electrician",
+        "Plumber", "Gas Agency", "Internet Guy", "Mechanic", "Doctor", "Lawyer",
+        "CA", "Mobile Shop", "Car Wash", "Laundry", "Cleaning", "Garage",
+        "Delivery", "Courier", "Dudhvala", "Majdoor"
+    ]
+    locations = [
+        "Surat", "Ahmedabad", "Mumbai", "Delhi", "Rajkot", "Vadodara", "Dahod",
+        "Gota", "Paldi", "Anand", "Gandhinagar", "Memnagar", "Mahmedabad",
+        "Sanand", "Akota", "Gorwa", "Manjalpur", "Bhayli"
+    ]
 
     def random_indian_number():
         while True:
@@ -110,36 +127,19 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             used_numbers.add(num)
             return final
 
-    total_to_generate = 0
-    memory_zip = io.BytesIO()
-
-    relationship_names = [
-        "Papa", "Mummy", "Bhai", "Didi", "Bhabhi", "Chacha", "Chachi",
-        "Mama", "Mami", "Bua", "Fufa", "Nana", "Nani", "Dada", "Dadi",
-        "Baby", "Janu", "Darling", "Hubby", "Wifey", "Bestie", "Dost"
-    ]
-    service_suffixes = [
-        "Kirana Store", "Tailor", "Maid", "Watchman", "Driver", "Electrician",
-        "Plumber", "Gas Agency", "Internet Guy", "Mechanic", "Doctor", "Lawyer",
-        "CA", "Mobile Shop", "Car Wash", "Laundry", "Cleaning", "Garage",
-        "Delivery", "Courier", "Dudhvala", "Majdoor"
-    ]
-    locations = [
-        "Surat", "Ahmedabad", "Mumbai", "Delhi", "Rajkot", "Vadodara", "Dahod",
-        "Gota", "Paldi", "Anand", "Gandhinagar", "Memnagar", "Mahmedabad",
-        "Sanand", "Akota", "Gorwa", "Manjalpur", "Bhayli"
-    ]
-
     with zipfile.ZipFile(memory_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
         for i in range(1, num_files + 1):
             count = random.randint(min_contacts, max_contacts)
-            csv_needed = min(int(count * 0.7), len(used_from_csv))
-            random_needed = count - csv_needed
-            total_to_generate += random_needed
 
-            selected_csv = random.sample(used_from_csv, csv_needed) if csv_needed > 0 else []
-            for num in selected_csv:
-                used_from_csv.remove(num)
+            # 🔹 Use 70% of THIS batch from CSV (not full file)
+            csv_needed = min(int(count * 0.7), len(csv_numbers))
+            random_needed = count - csv_needed
+            total_used_from_csv += csv_needed
+            total_random_generated += random_needed
+
+            selected_csv = random.sample(csv_numbers, csv_needed) if csv_needed > 0 else []
+            if confirm_overwrite:
+                csv_numbers = [n for n in csv_numbers if n not in selected_csv]
 
             csv_prefixed = [f"+91{num.strip()}" if not num.strip().startswith("+91") else num.strip()
                             for num in selected_csv]
@@ -174,28 +174,34 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
 
             zipf.writestr(f"{vcf_base_name}_{i}_icloud_realistic.vcf", vcf_text)
 
-    # Overwrite CSV only if confirmed
+    # Save CSV only if confirmed
     if confirm_overwrite:
-        df_remaining = pd.DataFrame({COLUMN_NAME: remaining_after_use})
+        df_remaining = pd.DataFrame({COLUMN_NAME: csv_numbers})
         df_remaining.to_csv(CSV_PATH, index=False, encoding="utf-8")
 
     memory_zip.seek(0)
     df = pd.DataFrame(all_data)
 
-    return memory_zip, df, len(used_from_csv) * num_files, total_to_generate, len(remaining_after_use), total_csv
+    return memory_zip, df, total_used_from_csv, total_random_generated, len(csv_numbers), total_csv
 
 # ========== RUN BUTTON ==========
 if st.button("🚀 Generate Files"):
-    if not confirm_overwrite:
-        st.warning("⚠️ Please tick 'Confirm overwrite' before generating.")
-        st.stop()
-
     result_zip, result_csv, used_csv, generated_new, remaining, total_csv = generate_icloud_vcf(
         num_files, min_contacts, max_contacts, vcf_base_name
     )
 
-    st.success(f"✅ Used {used_csv} CSV numbers (+91 prefixed) and generated {generated_new} random numbers.")
-    st.info(f"📊 **Summary:**\n\n- Total before: {total_csv}\n- Used this run: {used_csv}\n- Remaining now: {remaining}")
+    if confirm_overwrite:
+        st.success("✅ CSV file updated successfully.")
+    else:
+        st.info("ℹ️ CSV file NOT modified (Confirm Overwrite was unchecked).")
+
+    st.success(
+        f"✅ Used {used_csv} CSV numbers (+91 prefixed) and generated {generated_new} random numbers.\n\n"
+        f"📊 **Summary:**\n"
+        f"- Total before: {total_csv}\n"
+        f"- Used this run: {used_csv}\n"
+        f"- Remaining now: {remaining}"
+    )
 
     st.download_button(
         "⬇️ Download ZIP (.vcf)", data=result_zip,
