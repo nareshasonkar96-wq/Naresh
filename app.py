@@ -78,6 +78,11 @@ if not os.path.exists(CSV_PATH):
     st.stop()
 
 df_csv = pd.read_csv(CSV_PATH)
+
+# Clean up number format (avoid .0 issue)
+df_csv[COLUMN_NAME] = df_csv[COLUMN_NAME].astype(str).str.replace(r"\.0$", "", regex=True)
+df_csv[COLUMN_NAME] = df_csv[COLUMN_NAME].str.replace(r"\D", "", regex=True)
+
 if COLUMN_NAME not in df_csv.columns:
     st.error(f"❌ Column '{COLUMN_NAME}' not found in CSV file.")
     st.stop()
@@ -109,17 +114,8 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             num = start_digit + ''.join(random.choices("0123456789", k=9))
             if num in used_numbers or num in csv_numbers:
                 continue
-            formatted = random.choice(["+91", "91", "0", "plain"])
-            if formatted == "+91":
-                final = f"+91{num}"
-            elif formatted == "91":
-                final = f"91{num}"
-            elif formatted == "0":
-                final = f"0{num}"
-            else:
-                final = num
             used_numbers.add(num)
-            return final
+            return f"+91 {num}"
 
     with zipfile.ZipFile(memory_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
         for i in range(1, num_files + 1):
@@ -133,13 +129,23 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             if confirm_overwrite:
                 csv_numbers = [n for n in csv_numbers if n not in selected_csv]
 
-            csv_prefixed = [f"+91{num.strip()}" if not num.strip().startswith("+91") else num.strip()
-                            for num in selected_csv]
+            # ✅ Format numbers properly: +91 + space + number
+            csv_prefixed = []
+            for num in selected_csv:
+                clean_num = str(num).replace(".0", "").strip()
+                clean_num = "".join(filter(str.isdigit, clean_num))
+                if not clean_num.startswith("91") and len(clean_num) == 10:
+                    csv_prefixed.append(f"+91 {clean_num}")
+                elif clean_num.startswith("91") and len(clean_num) == 12:
+                    csv_prefixed.append(f"+{clean_num[:2]} {clean_num[2:]}")
+                else:
+                    csv_prefixed.append(f"+91 {clean_num[-10:]}")
+
             random_numbers = [random_indian_number() for _ in range(random_needed)]
             all_numbers = csv_prefixed + random_numbers
             random.shuffle(all_numbers)
 
-            # 💡 Pick unique names per file (no repetition)
+            # 💡 Unique names per file
             unique_names = random.sample(custom_names, min(count, len(custom_names)))
 
             vcf_text = ""
@@ -162,7 +168,6 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
 
     memory_zip.seek(0)
     df = pd.DataFrame(all_data)
-
     return memory_zip, df, total_used_from_csv, total_random_generated, len(csv_numbers), total_csv
 
 # ========== RUN BUTTON ==========
@@ -177,7 +182,7 @@ if st.button("🚀 Generate Files"):
         st.info("ℹ️ CSV file NOT modified (Confirm Overwrite was unchecked).")
 
     st.success(
-        f"✅ Used {used_csv} CSV numbers (+91 prefixed) and generated {generated_new} random numbers.\n\n"
+        f"✅ Used {used_csv} CSV numbers (+91 space format) and generated {generated_new} random numbers.\n\n"
         f"📊 **Summary:**\n"
         f"- Total before: {total_csv}\n"
         f"- Used this run: {used_csv}\n"
