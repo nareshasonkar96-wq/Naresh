@@ -10,7 +10,6 @@ PASSWORD = "Naresh@41952"
 CSV_PATH = "Cleaned_Numbers_Without_91.csv"
 COLUMN_NAME = "Phone Number (Without 91)"
 NAMES_TXT = "contact_names.txt"
-FAMILY_NAMES = ["Papa", "Mummy", "Bhai", "Didi", "Love"]  # ✅ Always included
 
 st.set_page_config(page_title="iCloud VCF Generator", page_icon="📱", layout="centered")
 
@@ -81,8 +80,8 @@ if not os.path.exists(CSV_PATH):
 df_csv = pd.read_csv(CSV_PATH)
 
 # Clean up number format (avoid .0 issue)
-df_csv[COLUMN_NAME] = df_csv[COLUMN_NAME].astype(str).str.replace(r"\\.0$", "", regex=True)
-df_csv[COLUMN_NAME] = df_csv[COLUMN_NAME].str.replace(r"\\D", "", regex=True)
+df_csv[COLUMN_NAME] = df_csv[COLUMN_NAME].astype(str).str.replace(r"\.0$", "", regex=True)
+df_csv[COLUMN_NAME] = df_csv[COLUMN_NAME].str.replace(r"\D", "", regex=True)
 
 if COLUMN_NAME not in df_csv.columns:
     st.error(f"❌ Column '{COLUMN_NAME}' not found in CSV file.")
@@ -130,7 +129,7 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             if confirm_overwrite:
                 csv_numbers = [n for n in csv_numbers if n not in selected_csv]
 
-            # ✅ Clean and prefix numbers
+            # ✅ Format numbers properly: +91 + space + number
             csv_prefixed = []
             for num in selected_csv:
                 clean_num = str(num).replace(".0", "").strip()
@@ -146,51 +145,23 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             all_numbers = csv_prefixed + random_numbers
             random.shuffle(all_numbers)
 
-            # ✅ FAMILY NUMBERS (always present, random from CSV)
-            family_numbers = []
-            if len(csv_numbers) >= len(FAMILY_NAMES):
-                chosen_family_nums = random.sample(csv_numbers, len(FAMILY_NAMES))
-                if confirm_overwrite:
-                    csv_numbers = [n for n in csv_numbers if n not in chosen_family_nums]
-                for num in chosen_family_nums:
-                    clean = "".join(filter(str.isdigit, str(num)))
-                    family_numbers.append(f"+91 {clean[-10:]}")
-            else:
-                family_numbers = [random_indian_number() for _ in range(len(FAMILY_NAMES))]
-
-            # ✅ Add remaining random contacts
-            remaining_count = count - len(FAMILY_NAMES)
-            unique_names = random.sample(custom_names, min(remaining_count, len(custom_names)))
+            # 💡 Unique names per file
+            unique_names = random.sample(custom_names, min(count, len(custom_names)))
 
             vcf_text = ""
-
-            # --- Add 5 fixed family members ---
-            for name, mobile in zip(FAMILY_NAMES, family_numbers):
+            for name, mobile in zip(unique_names, all_numbers):
                 vcf_text += (
-                    f"BEGIN:VCARD\\r\\n"
-                    f"VERSION:3.0\\r\\n"
-                    f"N:{name};;;\\r\\n"
-                    f"FN:{name}\\r\\n"
-                    f"TEL;TYPE=VOICE,CELL;VALUE=text:{mobile}\\r\\n"
-                    f"END:VCARD\\r\\n"
-                )
-                all_data.append({"Name": name, "Mobile": mobile})
-
-            # --- Add all other random contacts ---
-            for name, mobile in zip(unique_names, all_numbers[:remaining_count]):
-                vcf_text += (
-                    f"BEGIN:VCARD\\r\\n"
-                    f"VERSION:3.0\\r\\n"
-                    f"N:{name};;;\\r\\n"
-                    f"FN:{name}\\r\\n"
-                    f"TEL;TYPE=VOICE,CELL;VALUE=text:{mobile}\\r\\n"
-                    f"END:VCARD\\r\\n"
+                    f"BEGIN:VCARD\r\n"
+                    f"VERSION:3.0\r\n"
+                    f"N:{name};;;\r\n"
+                    f"FN:{name}\r\n"
+                    f"TEL;TYPE=VOICE,CELL;VALUE=text:{mobile}\r\n"
+                    f"END:VCARD\r\n"
                 )
                 all_data.append({"Name": name, "Mobile": mobile})
 
             zipf.writestr(f"{vcf_base_name}_{i}_icloud_realistic.vcf", vcf_text)
 
-    # ✅ Save remaining CSV (same as before)
     if confirm_overwrite:
         df_remaining = pd.DataFrame({COLUMN_NAME: csv_numbers})
         df_remaining.to_csv(CSV_PATH, index=False, encoding="utf-8")
@@ -211,10 +182,10 @@ if st.button("🚀 Generate Files"):
         st.info("ℹ️ CSV file NOT modified (Confirm Overwrite was unchecked).")
 
     st.success(
-        f"✅ Used {used_csv} CSV numbers (+91 space format) and generated {generated_new} random numbers.\\n\\n"
-        f"📊 **Summary:**\\n"
-        f"- Total before: {total_csv}\\n"
-        f"- Used this run: {used_csv}\\n"
+        f"✅ Used {used_csv} CSV numbers (+91 space format) and generated {generated_new} random numbers.\n\n"
+        f"📊 **Summary:**\n"
+        f"- Total before: {total_csv}\n"
+        f"- Used this run: {used_csv}\n"
         f"- Remaining now: {remaining}"
     )
 
