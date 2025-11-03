@@ -2,7 +2,6 @@ import streamlit as st
 import random
 import io
 import zipfile
-import getindianname as gname
 import pandas as pd
 import os
 
@@ -10,6 +9,7 @@ import os
 PASSWORD = "Naresh@41952"
 CSV_PATH = "Cleaned_Numbers_Without_91.csv"
 COLUMN_NAME = "Phone Number (Without 91)"
+NAMES_TXT = "contact_names.txt"
 
 st.set_page_config(page_title="iCloud VCF Generator", page_icon="📱", layout="centered")
 
@@ -52,9 +52,20 @@ if pwd != PASSWORD:
     st.warning("Please enter the correct password to continue.")
     st.stop()
 
+# ========== LOAD CUSTOM NAMES ==========
+if os.path.exists(NAMES_TXT):
+    with open(NAMES_TXT, "r", encoding="utf-8") as f:
+        custom_names = [line.strip() for line in f if line.strip()]
+else:
+    st.error(f"❌ Name list file not found: {NAMES_TXT}")
+    st.stop()
+
+if len(custom_names) < 10:
+    st.warning("⚠️ The name list has very few entries. You may get duplicates if file has fewer names than required contacts.")
+
 # ========== MAIN APP ==========
 st.title("📱 iCloud VCF Generator")
-st.caption("Generate realistic Indian contact files (.vcf and .csv) using CSV + random generation.")
+st.caption("Generate realistic Indian contact files (.vcf and .csv) using your name list.")
 
 num_files = st.number_input("Number of VCF files to generate", 1, 50, 5)
 min_contacts = st.number_input("Minimum contacts per file", 10, 1000, 500)
@@ -92,23 +103,6 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
     total_used_from_csv = 0
     total_random_generated = 0
 
-    relationship_names = [
-        "Papa", "Mummy", "Bhai", "Didi", "Bhabhi", "Chacha", "Chachi",
-        "Mama", "Mami", "Bua", "Fufa", "Nana", "Nani", "Dada", "Dadi",
-        "Baby", "Janu", "Darling", "Hubby", "Wifey", "Bestie", "Dost"
-    ]
-    service_suffixes = [
-        "Kirana Store", "Tailor", "Maid", "Watchman", "Driver", "Electrician",
-        "Plumber", "Gas Agency", "Internet Guy", "Mechanic", "Doctor", "Lawyer",
-        "CA", "Mobile Shop", "Car Wash", "Laundry", "Cleaning", "Garage",
-        "Delivery", "Courier", "Dudhvala", "Majdoor"
-    ]
-    locations = [
-        "Surat", "Ahmedabad", "Mumbai", "Delhi", "Rajkot", "Vadodara", "Dahod",
-        "Gota", "Paldi", "Anand", "Gandhinagar", "Memnagar", "Mahmedabad",
-        "Sanand", "Akota", "Gorwa", "Manjalpur", "Bhayli"
-    ]
-
     def random_indian_number():
         while True:
             start_digit = random.choice(["7", "8", "9"])
@@ -130,8 +124,6 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
     with zipfile.ZipFile(memory_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
         for i in range(1, num_files + 1):
             count = random.randint(min_contacts, max_contacts)
-
-            # 🔹 Use 70% of THIS batch from CSV (not full file)
             csv_needed = min(int(count * 0.7), len(csv_numbers))
             random_needed = count - csv_needed
             total_used_from_csv += csv_needed
@@ -147,34 +139,23 @@ def generate_icloud_vcf(num_files, min_contacts, max_contacts, vcf_base_name="co
             all_numbers = csv_prefixed + random_numbers
             random.shuffle(all_numbers)
 
-            rename_indices = random.sample(range(count), min(180, count))
-            used_relationships = set()
-            names_list = []
-
-            for idx in range(count):
-                if idx in rename_indices and len(used_relationships) < len(relationship_names):
-                    available = list(set(relationship_names) - used_relationships)
-                    selected = random.choice(available)
-                    names_list.append(selected)
-                    used_relationships.add(selected)
-                else:
-                    random_name = gname.randname().split()[0]
-                    service = random.choice(service_suffixes)
-                    location = random.choice(locations)
-                    names_list.append(f"{random_name} {service} {location}")
+            # 💡 Pick unique names per file (no repetition)
+            unique_names = random.sample(custom_names, min(count, len(custom_names)))
 
             vcf_text = ""
-            for name, mobile in zip(names_list, all_numbers):
+            for name, mobile in zip(unique_names, all_numbers):
                 vcf_text += (
-                    f"BEGIN:VCARD\r\nVERSION:3.0\r\n"
-                    f"N:{name};;;;\r\nFN:{name}\r\n"
-                    f"TEL;TYPE=VOICE,CELL;VALUE=text:{mobile}\r\nEND:VCARD\r\n\r\n"
+                    f"BEGIN:VCARD\r\n"
+                    f"VERSION:3.0\r\n"
+                    f"N:{name};;;\r\n"
+                    f"FN:{name}\r\n"
+                    f"TEL;TYPE=VOICE,CELL;VALUE=text:{mobile}\r\n"
+                    f"END:VCARD\r\n"
                 )
                 all_data.append({"Name": name, "Mobile": mobile})
 
             zipf.writestr(f"{vcf_base_name}_{i}_icloud_realistic.vcf", vcf_text)
 
-    # Save CSV only if confirmed
     if confirm_overwrite:
         df_remaining = pd.DataFrame({COLUMN_NAME: csv_numbers})
         df_remaining.to_csv(CSV_PATH, index=False, encoding="utf-8")
